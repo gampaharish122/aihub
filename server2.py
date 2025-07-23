@@ -15,14 +15,25 @@ AUTH_HEADER = {
 # Initialize MCP server
 mcp = FastMCP("GetAIHubApi", stateless_http=True, host="0.0.0.0", port=PORT)
 
-# Tool 1: Original API
+# Helper function to clean source types
+def normalize_source_type(source_type: str) -> str:
+    """
+    Normalizes and formats the source type input.
+    """
+    allowed_types = {"news", "deals", "filings", "jobs", "socialmedia", "companies","Events", "Reports", "Patents", "Research",  "Financials"}
+    source_types = [s.strip().lower() for s in source_type.split(",")]
+    filtered = [s.capitalize() for s in source_types if s in allowed_types]
+    return ",".join(filtered)
+
+# Tool 1: Dynamic Source Type
 @mcp.tool()
-def GetAIHubApi(question: str) -> Dict:
+def GetAIHubApi(question: str, source_type: str) -> Dict:
     """
-    Calls the GlobalData AI Hub API with hardcoded source types and user-provided question.
+    Calls the GlobalData AI Hub API with dynamic source types and user-provided question.
     """
-    url = f"{API_ENDPOINT_MAIN}?SourceType=News%2CDeals%2CFilings&Question={requests.utils.quote(question)}"
-    
+    cleaned_source_type = normalize_source_type(source_type)
+    url = f"{API_ENDPOINT_MAIN}?SourceType={requests.utils.quote(cleaned_source_type)}&Question={requests.utils.quote(question)}"
+
     try:
         response = requests.get(url, headers=AUTH_HEADER, timeout=1000)
         response.raise_for_status()
@@ -30,15 +41,16 @@ def GetAIHubApi(question: str) -> Dict:
     except requests.RequestException as e:
         return {"error": str(e)}
 
-# Tool 2: Source Data API with ChunkSize and Date range
+# Tool 2: Dynamic Source Data with extra parameters
 @mcp.tool()
-def GetAIHubAPISourceData(question: str, chunk_size: int, date_start: str, date_end: str) -> Dict:
+def GetAIHubAPISourceData(question: str, source_type: str, chunk_size: int, date_start: str, date_end: str) -> Dict:
     """
-    Calls the GlobalData AI Hub SourceData API with SourceType, question, and user-defined chunk size and date range.
+    Calls the GlobalData AI Hub SourceData API with dynamic SourceType, question, chunk size, and date range.
     Format for date_start and date_end should be DD-MM-YYYY.
     """
+    cleaned_source_type = normalize_source_type(source_type)
     params = {
-        "SourceType": "News,Deals,Filings",
+        "SourceType": cleaned_source_type,
         "Question": question,
         "ChunkSize": chunk_size,
         "DateStart": date_start,
@@ -46,7 +58,7 @@ def GetAIHubAPISourceData(question: str, chunk_size: int, date_start: str, date_
     }
     encoded_params = requests.compat.urlencode(params, quote_via=requests.utils.quote)
     url = f"{API_ENDPOINT_SOURCE_DATA}?{encoded_params}"
-    
+
     try:
         response = requests.get(url, headers=AUTH_HEADER, timeout=1000)
         response.raise_for_status()
